@@ -142,20 +142,12 @@ func (oa *oidcAuth) loginCb(c *gin.Context) {
 	q := redirectURL.Query()
 	q.Set("id_token", idToken)
 	redirectURL.RawQuery = q.Encode()
-
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL.String())
+	redirectTo(c, redirectURL.String())
 }
 
 func (oa *oidcAuth) login(c *gin.Context) {
-	// set request id in response header
-	// requestID := c.Writer.Header().Get("X-Request-ID")
-
 	// check if login_redirect_url is present in query params
 	loginRedirectURL := c.Request.URL.Query().Get("login_redirect_url")
-	if loginRedirectURL == "" {
-		c.String(http.StatusBadRequest, "Required query param login_redirect_url not found")
-		return
-	}
 
 	// Generate AuthURL of the OIDC provider
 	authURL, err := url.Parse(oa.provider.Endpoint().AuthURL)
@@ -174,7 +166,12 @@ func (oa *oidcAuth) login(c *gin.Context) {
 	q.Set("state", state)
 
 	// Store login redirect url in State map
-	oa.stateMap[state] = loginRedirectURL
+	if loginRedirectURL == "" {
+		oa.stateMap[state] = c.Request.URL.String()
+	} else {
+		oa.stateMap[state] = loginRedirectURL
+	}
+
 	authURL.RawQuery = q.Encode()
 
 	// Redirect to generated AuthURL
@@ -188,7 +185,7 @@ func tokenFromRequest(c *gin.Context) string {
 	if len(split) == 2 {
 		return split[1]
 	}
-	return ""
+	return c.Request.URL.Query().Get("id_token")
 }
 
 // rolesFromToken extracts roles from a token. Returns empty array if not present.
@@ -221,8 +218,8 @@ func (oa *oidcAuth) Authenticate(c *gin.Context) (teamID string, replied bool) {
 	// Check is the id token exists in the request
 	token := tokenFromRequest(c)
 	if token == "" {
-		logger.Debug().Str("request_id", requestID).Msg("Authorization header is empty")
-		httpError(c, http.StatusBadRequest)
+		logger.Debug().Str("request_id", requestID).Msg("Authorization header is empty, redirecting to login")
+		redirectTo(c, fmt.Sprintf("/login?login_redirect_url=%s", c.Request.URL.String()))
 		return "", true
 	}
 
@@ -232,8 +229,8 @@ func (oa *oidcAuth) Authenticate(c *gin.Context) (teamID string, replied bool) {
 	session := ginsessions.GetSession(c)
 	refreshToken := session.Get("refresh_token")
 	if refreshToken == nil {
-		logger.Debug().Str("request_id", requestID).Msg("Refresh token not found in session")
-		httpError(c, http.StatusUnauthorized)
+		logger.Debug().Str("request_id", requestID).Msg("Refresh token not found in session, redirecting to login")
+		redirectTo(c, fmt.Sprintf("/login?login_redirect_url=%s", c.Request.URL.String()))
 		return "", true
 	}
 
@@ -266,8 +263,8 @@ func (oa *oidcAuth) Authenticate(c *gin.Context) (teamID string, replied bool) {
 				return "", true
 			}
 		} else {
-			logger.Error().Str("request_id", requestID).AnErr("error", err).Msg("Token verification error")
-			httpError(c, http.StatusUnauthorized)
+			logger.Error().Str("request_id", requestID).AnErr("error", err).Msg("Token verification error, redirecting to login")
+			redirectTo(c, "/login")
 			return "", true
 		}
 	}
@@ -303,7 +300,7 @@ checkloop:
 	// If access level is empty or and doesn't match role scope return error
 	if accessLevel == "" {
 		logger.Debug().Msg("Misconfigured Roles, Can't get access level from token")
-		httpError(c, http.StatusUnauthorized)
+		httpError(c, http.StatusForbidden)
 		return "", true
 	} else if accessLevel != "admin" {
 		if c.Request.Method != "HEAD" && c.Request.Method != "GET" {

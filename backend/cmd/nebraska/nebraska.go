@@ -37,7 +37,7 @@ var (
 	flatcarPackagesPath = flag.String("flatcar-packages-path", "", "Path where Flatcar packages files should be stored")
 	nebraskaURL         = flag.String("nebraska-url", "", "nebraska URL (http://host:port - required when hosting Flatcar packages in nebraska)")
 	httpLog             = flag.Bool("http-log", false, "Enable http requests logging")
-	httpStaticDir       = flag.String("http-static-dir", "../frontend/built", "Path to frontend static files")
+	httpStaticDir       = flag.String("http-static-dir", "../frontend/build", "Path to frontend static files")
 	authMode            = flag.String("auth-mode", "github", "authentication mode, available modes: noop, github, oidc")
 	ghClientID          = flag.String("gh-client-id", "", fmt.Sprintf("GitHub client ID used for authentication; can be taken from %s env var too", ghClientIDEnvName))
 	ghClientSecret      = flag.String("gh-client-secret", "", fmt.Sprintf("GitHub client secret used for authentication; can be taken from %s env var too", ghClientSecretEnvName))
@@ -61,6 +61,7 @@ var (
 	appTitle            = flag.String("client-title", "", "Client app title")
 	appHeaderStyle      = flag.String("client-header-style", "light", "Client app header style, should be either dark or light")
 	apiEndpointSuffix   = flag.String("api-endpoint-suffix", "", "Additional suffix for the API endpoint to serve Omaha clients on; use a secret to only serve your clients, e.g., mysecret results in /v1/update/mysecret")
+	debug               = flag.Bool("debug", false, "sets log level to debug")
 )
 
 func main() {
@@ -71,15 +72,13 @@ func main() {
 }
 
 func mainWithError() error {
-	debug := flag.Bool("debug", false, "sets log level to debug")
+
+	flag.Parse()
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-
 	if *debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
-
-	flag.Parse()
 
 	if err := checkArgs(); err != nil {
 		return err
