@@ -351,8 +351,9 @@ func setupRoutes(ctl *controller, httpLog bool) *gin.Engine {
 	// Config router setup
 	configRouter := wrappedEngine.Group("/config", "config")
 	if *authMode != "oidc" {
-		configRouter.GET("/", ctl.getConfig)
+		configRouter.Use(ctl.authenticate)
 	}
+	configRouter.GET("/", ctl.getConfig)
 	// Host Flatcar packages payloads
 	if *hostFlatcarPackages {
 		flatcarPkgsRouter := wrappedEngine.Group("/flatcar", "flatcar")
