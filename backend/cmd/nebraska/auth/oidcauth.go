@@ -175,7 +175,7 @@ func (oa *oidcAuth) login(c *gin.Context) {
 	authURL.RawQuery = q.Encode()
 
 	// Redirect to generated AuthURL
-	c.Redirect(http.StatusTemporaryRedirect, authURL.String())
+	redirectTo(c, authURL.String())
 }
 
 // tokenFromRequest extracts token from request. Returns empty string if not present.
@@ -218,8 +218,8 @@ func (oa *oidcAuth) Authenticate(c *gin.Context) (teamID string, replied bool) {
 	// Check is the id token exists in the request
 	token := tokenFromRequest(c)
 	if token == "" {
-		logger.Debug().Str("request_id", requestID).Msg("Authorization header is empty, redirecting to login")
-		redirectTo(c, fmt.Sprintf("/login?login_redirect_url=%s", c.Request.URL.String()))
+		logger.Debug().Str("request_id", requestID).Msg("Authorization header is empty")
+		httpError(c, http.StatusUnauthorized)
 		return "", true
 	}
 
@@ -229,8 +229,8 @@ func (oa *oidcAuth) Authenticate(c *gin.Context) (teamID string, replied bool) {
 	session := ginsessions.GetSession(c)
 	refreshToken := session.Get("refresh_token")
 	if refreshToken == nil {
-		logger.Debug().Str("request_id", requestID).Msg("Refresh token not found in session, redirecting to login")
-		redirectTo(c, fmt.Sprintf("/login?login_redirect_url=%s", c.Request.URL.String()))
+		logger.Debug().Str("request_id", requestID).Msg("Refresh token not found in session")
+		httpError(c, http.StatusUnauthorized)
 		return "", true
 	}
 
@@ -263,8 +263,8 @@ func (oa *oidcAuth) Authenticate(c *gin.Context) (teamID string, replied bool) {
 				return "", true
 			}
 		} else {
-			logger.Error().Str("request_id", requestID).AnErr("error", err).Msg("Token verification error, redirecting to login")
-			redirectTo(c, "/login")
+			logger.Error().Str("request_id", requestID).AnErr("error", err).Msg("Token verification error")
+			httpError(c, http.StatusUnauthorized)
 			return "", true
 		}
 	}

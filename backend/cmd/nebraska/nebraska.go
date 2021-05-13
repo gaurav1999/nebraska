@@ -350,8 +350,9 @@ func setupRoutes(ctl *controller, httpLog bool) *gin.Engine {
 
 	// Config router setup
 	configRouter := wrappedEngine.Group("/config", "config")
-	configRouter.GET("/", ctl.getConfig)
-
+	if *authMode != "oidc" {
+		configRouter.GET("/", ctl.getConfig)
+	}
 	// Host Flatcar packages payloads
 	if *hostFlatcarPackages {
 		flatcarPkgsRouter := wrappedEngine.Group("/flatcar", "flatcar")
@@ -360,7 +361,9 @@ func setupRoutes(ctl *controller, httpLog bool) *gin.Engine {
 
 	// Serve frontend static content
 	staticRouter := wrappedEngine.Group("/", "static")
-	staticRouter.Use(ctl.authenticate)
+	if *authMode != "oidc" {
+		staticRouter.Use(ctl.authenticate)
+	}
 	staticRouter.StaticFile("", filepath.Join(*httpStaticDir, "index.html"))
 	for _, file := range []string{"index.html", "favicon.png", "robots.txt"} {
 		staticRouter.StaticFile(file, filepath.Join(*httpStaticDir, file))
