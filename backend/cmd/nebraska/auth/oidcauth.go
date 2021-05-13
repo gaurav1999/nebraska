@@ -91,6 +91,41 @@ func (oa *oidcAuth) SetupRouter(router ginhelpers.Router) {
 	oidcRouter := router.Group("/login", "oidc")
 	oidcRouter.GET("/cb", oa.loginCb)
 	oidcRouter.GET("/", oa.login)
+	oidcRouter.GET("/validate_token", oa.ValidateToken)
+}
+
+func (oa *oidcAuth) ValidateToken(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// set request id in response header
+	requestID := c.Writer.Header().Get("X-Request-ID")
+
+	// Check is the id token exists in the request
+	token := tokenFromRequest(c)
+	if token == "" {
+		logger.Debug().Str("request_id", requestID).Msg("ValidateToken, Authorization header is empty")
+		httpError(c, http.StatusUnauthorized)
+		return
+	}
+
+	// If refresh token is not available in the session
+	// mark the request as unauthorized so that the session
+	// can be recreated with refresh_token
+	session := ginsessions.GetSession(c)
+	refreshToken := session.Get("refresh_token")
+	if refreshToken == nil {
+		logger.Debug().Str("request_id", requestID).Msg("ValidateToken, Refresh token not found in session")
+		httpError(c, http.StatusUnauthorized)
+		return
+	}
+
+	_, err := oa.verifier.Verify(ctx, token)
+	if err != nil {
+		logger.Error().Str("request_id", requestID).AnErr("error", err).Msg("ValidateToken, Token verification error")
+		httpError(c, http.StatusUnauthorized)
+		return
+	}
+	c.JSON(http.StatusOK, map[string]bool{"valid": true})
 }
 
 func (oa *oidcAuth) loginCb(c *gin.Context) {
